@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
-from werkzeug.security import generate_password_hash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import init_db, seed_db, get_db
 
 app = Flask(__name__)
@@ -51,8 +51,30 @@ def register():
     return render_template("register.html")
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "POST":
+        email = request.form.get("email")
+        password = request.form.get("password")
+
+        if not email or not password:
+            flash("All fields are required.")
+            return redirect(url_for("login"))
+
+        with get_db() as conn:
+            user = conn.execute(
+                "SELECT id, password_hash FROM users WHERE email = ?",
+                (email,)
+            ).fetchone()
+
+            if user and check_password_hash(user["password_hash"], password):
+                session["user_id"] = user["id"]
+                flash("Successfully signed in!")
+                return redirect(url_for("landing"))
+
+            flash("Invalid email or password.")
+            return redirect(url_for("login"))
+
     return render_template("login.html")
 
 
@@ -62,7 +84,9 @@ def login():
 
 @app.route("/logout")
 def logout():
-    return "Logout — coming in Step 3"
+    session.clear()
+    flash("You have been logged out successfully.")
+    return redirect(url_for("landing"))
 
 
 @app.route("/profile")
